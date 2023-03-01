@@ -20,15 +20,7 @@ class ShardObject():
     pass
 
 
-class MongoDb(Service):
-    """Mongo database service
-    """
-    __collections__: Dict[str, MongoCollectionField] = {}
-    log = getLogger('typeddb')
-    __pools: List[MongoConnection] = []
-    __items: List[ShardObject] = []
-    __sharded: bool = False
-
+class MongoDbMeta(type):
     def __new__(cls, name, bases, namespace):
         collections = {}
         for col_name, value in list(namespace.items()):
@@ -37,6 +29,16 @@ class MongoDb(Service):
                 del namespace[col_name]
         namespace['__collections__'] = collections
         return super().__new__(cls, name, bases, namespace)
+
+
+class MongoDb(Service, metaclass=MongoDbMeta):
+    """Mongo database service
+    """
+    __collections__: Dict[str, MongoCollectionField] = {}
+    log = getLogger('typeddb')
+    __pools: List[MongoConnection] = []
+    __items: List[ShardObject] = []
+    __sharded: bool = False
 
     @classmethod
     def with_collections(cls, *collections: str) -> Type['MongoDb']:
