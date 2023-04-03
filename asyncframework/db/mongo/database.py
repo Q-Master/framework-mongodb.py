@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import asyncio
 from typing import Union, Iterable, Tuple, Dict, List, Type, Hashable
+from abc import ABCMeta
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 from asyncframework.app import Service
 from asyncframework.log import get_logger
@@ -20,7 +21,7 @@ class ShardObject():
     pass
 
 
-class MongoDbMeta(type):
+class MongoDbMeta(ABCMeta):
     def __new__(cls, name, bases, namespace):
         collections = {}
         for col_name, value in list(namespace.items()):
