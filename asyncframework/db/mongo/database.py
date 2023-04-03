@@ -3,7 +3,7 @@ import asyncio
 from typing import Union, Iterable, Tuple, Dict, List, Type, Hashable
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 from asyncframework.app import Service
-from asyncframework.log import getLogger
+from asyncframework.log import get_logger
 from .connection import MongoConnection
 from .collection_field import MongoCollectionField
 from .collection import MongoCollection
@@ -35,7 +35,7 @@ class MongoDb(Service, metaclass=MongoDbMeta):
     """Mongo database service
     """
     __collections__: Dict[str, MongoCollectionField] = {}
-    log = getLogger('typeddb')
+    log = get_logger('typeddb')
     __pools: List[MongoConnection] = []
     __items: List[ShardObject] = []
     __sharded: bool = False

@@ -6,7 +6,7 @@ from pymongo.cursor import CursorType
 from pymongo.collation import Collation
 from pymongo.client_session import ClientSession
 from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorCursor
-from asyncframework.log import getLogger
+from asyncframework.log import get_logger
 from packets import PacketBase
 from packets import TablePacket
 from .collection_field import MongoCollectionField
@@ -21,7 +21,7 @@ T = TypeVar('T', bound=PacketBase)
 class MongoCollection(Generic[T]):
     """MongoDb collection class
     """
-    log = getLogger('typed_collection')
+    log = get_logger('typed_collection')
     _collection: AsyncIOMotorCollection
     _collection_info: MongoCollectionField
     _cursor: Optional[AsyncIOMotorCursor] = None
