@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-from typing import List, Iterable, Optional, Dict, Any
+from typing import List, Sequence, Optional, Dict, Any
 from pymongo.operations import IndexModel
 from packets.packet import PacketBase, Packet
 
@@ -14,13 +14,13 @@ class Dummy(Packet):
 class MongoCollectionField():
     """Class for representing collections in database models
     """
-    def __init__(self, record_type: type[PacketBase], name: Optional[str] = None, indexes: Optional[Iterable[IndexModel]] = None, default_filter: Optional[Dict[str, Any]] = None, strict: bool = True, incremental_ids: bool = False):
+    def __init__(self, record_type: type[PacketBase], name: Optional[str] = None, indexes: Optional[Sequence[IndexModel]] = None, default_filter: Optional[Dict[str, Any]] = None, strict: bool = True, incremental_ids: bool = False):
         """Constructor
 
         Args:
             record_type (type[PacketBase]): record class(child of PacketBase)
             name (Optional[str], optional): database name of collection. If None - same as python name. Defaults to None.
-            indexes (Optional[Iterable[IndexModel]], optional): list of indexes which will be ensured on connection. Defaults to None.
+            indexes (Optional[Sequence[IndexModel]], optional): list of indexes which will be ensured on connection. Defaults to None.
             default_filter (Optional[Dict[str, Any]], optional): _description_. Defaults to None.
             strict (bool, optional): _description_. Defaults to True.
             incremental_ids (bool, optional): _description_. Defaults to False.

@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 import asyncio
-from typing import Union, Iterable, Tuple, Dict, List, Type, Hashable
+from typing import Union, Sequence, Tuple, Dict, List, Type, Hashable
 from abc import ABCMeta
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 from asyncframework.app import Service
@@ -13,7 +13,7 @@ from .collection import MongoCollection
 __all__ = ['MongoDb']
 
 
-config_type = Union[Iterable[Union[str, dict]], Union[str, dict]]
+config_type = Union[Sequence[Union[str, dict]], Union[str, dict]]
 key_type = Union[bytes, int]
 
 

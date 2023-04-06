@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-from typing import Union, Optional, TypeVar, Generic, List, Tuple, Iterable, Dict, Any
+from typing import Union, Optional, TypeVar, Generic, List, Tuple, Sequence, Dict, Any
 import asyncio
 from pymongo import ReturnDocument, ASCENDING, DESCENDING
 from pymongo.cursor import CursorType
@@ -233,13 +233,13 @@ class MongoCollection(Generic[T]):
         _filter = dict(self._collection_info.default_filter, **(filter or {}))
         return await self._collection.count_documents(_filter, projection)
 
-    async def save(self, data: Union[Iterable[T], T]):
+    async def save(self, data: Union[Sequence[T], T]):
         """Insert the packet to a collection
 
         Args:
-            data (Union[Iterable[T], T]): Iterable of packets or single packet to inser to collection
+            data (Union[Sequence[T], T]): Sequence of packets or single packet to inser to collection
         """
-        if isinstance(data, Iterable):
+        if isinstance(data, Sequence):
             if self._collection_info.incremental_ids:
                 await asyncio.gather((self._next_id(d) for d in data if d['_id'] is None))
             data_to_store = [d.dump() for d in data]
@@ -252,7 +252,7 @@ class MongoCollection(Generic[T]):
 
     async def store(self, 
         filter: dict, 
-        data: Union[Iterable[T],  T], 
+        data: Union[Sequence[T],  T], 
         upsert=False, 
         array_filters=Optional[List[Dict[str, Any]]], 
         bypass_document_validation=False, 
@@ -262,14 +262,14 @@ class MongoCollection(Generic[T]):
 
         Args:
             filter (dict): additional filter properties
-            data (Union[Iterable[T],  T]): Iterable of packets or a single packet to update in collection
+            data (Union[Sequence[T],  T]): Sequence of packets or a single packet to update in collection
             upsert (bool, optional): insert the new documents if not found. Defaults to False.
             array_filters (Optional[List[Dict[str, Any]]], optional): a list of filters specifying which array elements an update should apply. Requires MongoDB 3.6+.. Defaults to None.
             bypass_document_validation (bool, optional): allows the write to opt-out of document level validation. Defaults to False.
             collation (Optional[Union[Dict[str, Any], Collation]], optional): an instance of `Collation`. Defaults to None.
             session (Optional[ClientSession], optional): a `ClientSession`, created with `start_session()`. Defaults to None.
         """
-        if isinstance(data, Iterable):
+        if isinstance(data, Sequence):
             data_to_store = [d.dump() for d in data]
             await self._collection.update_many(filter, {"$set": data_to_store}, upsert=upsert, array_filters=array_filters, bypass_document_validation=bypass_document_validation, collation=collation, session=session)
         else:
