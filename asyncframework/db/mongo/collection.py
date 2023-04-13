@@ -257,7 +257,7 @@ class MongoCollection(Generic[T]):
         array_filters=Optional[List[Dict[str, Any]]], 
         bypass_document_validation=False, 
         collation=Optional[Union[Dict[str, Any], Collation]], 
-        session=Optional[ClientSession]):
+        session=Optional[ClientSession]) -> int:
         """Update the document(s) in the collection
 
         Args:
@@ -268,13 +268,17 @@ class MongoCollection(Generic[T]):
             bypass_document_validation (bool, optional): allows the write to opt-out of document level validation. Defaults to False.
             collation (Optional[Union[Dict[str, Any], Collation]], optional): an instance of `Collation`. Defaults to None.
             session (Optional[ClientSession], optional): a `ClientSession`, created with `start_session()`. Defaults to None.
+        
+        Returns:
+            int: amount of documents modified
         """
         if isinstance(data, Sequence):
             data_to_store = [d.dump() for d in data]
-            await self._collection.update_many(filter, {"$set": data_to_store}, upsert=upsert, array_filters=array_filters, bypass_document_validation=bypass_document_validation, collation=collation, session=session)
+            result = await self._collection.update_many(filter, {"$set": data_to_store}, upsert=upsert, array_filters=array_filters, bypass_document_validation=bypass_document_validation, collation=collation, session=session)
         else:
             data_to_store = data.dump()
-            await self._collection.update_one(filter, {"$set": data_to_store}, upsert=upsert, array_filters=array_filters, bypass_document_validation=bypass_document_validation, collation=collation, session=session)
+            result = await self._collection.update_one(filter, {"$set": data_to_store}, upsert=upsert, array_filters=array_filters, bypass_document_validation=bypass_document_validation, collation=collation, session=session)
+        return result.modified_count
 
     async def _next_id(self, d: T):
         if self._collection_info.incremental_ids:
