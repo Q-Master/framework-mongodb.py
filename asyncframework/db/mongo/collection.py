@@ -73,13 +73,13 @@ class MongoCollection(Generic[T]):
             Collection[T]: the clone of this collection with cursor set.
         """
         if 'cursor' in find_args.keys():
-            self.log.warn('\'cursor\' is not permitted in additional args')
+            self.log.warning('\'cursor\' is not permitted in additional args')
             find_args.pop('cursor')
         if 'fields' in find_args.keys():
-            self.log.warn('\'fields\' is not permitted in additional args')
+            self.log.warning('\'fields\' is not permitted in additional args')
             find_args.pop('fields')
         if 'cursor' in find_args.keys():
-            self.log.warn('\'cursor\' is not permitted in additional args')
+            self.log.warning('\'cursor\' is not permitted in additional args')
             find_args.pop('cursor')
         cloned: MongoCollection[T] = MongoCollection(self._collection, self._collection_info)
         _filter = dict(self._collection_info.default_filter, **filter)
@@ -136,13 +136,13 @@ class MongoCollection(Generic[T]):
             List[T]: the result of query, mapped to `CollectionField.record_type`
         """
         if 'fields' in find_args.keys():
-            self.log.warn('\'fields\' is not permitted in additional args')
+            self.log.warning('\'fields\' is not permitted in additional args')
             find_args.pop('fields')
         if 'filter' in find_args.keys():
-            self.log.warn('\'filter\' is not permitted in additional args')
+            self.log.warning('\'filter\' is not permitted in additional args')
             find_args.pop('filter')
         if 'cursor' in find_args.keys():
-            self.log.warn('\'cursor\' is not permitted in additional args. Use cursor()/next() instead')
+            self.log.warning('\'cursor\' is not permitted in additional args. Use cursor()/next() instead')
             raise RuntimeError('Use cursor()/next() instead')
         _filter = dict(self._collection_info.default_filter, **filter)
         result = []
@@ -163,16 +163,16 @@ class MongoCollection(Generic[T]):
             Optional[T]: the result of query, mapped to `CollectionField.record_type`
         """
         if 'fields' in find_args.keys():
-            self.log.warn('\'fields\' is not permitted in additional args')
+            self.log.warning('\'fields\' is not permitted in additional args')
             find_args.pop('fields')
         if 'filter' in find_args.keys():
-            self.log.warn('\'filter\' is not permitted in additional args')
+            self.log.warning('\'filter\' is not permitted in additional args')
             find_args.pop('filter')
         if 'limit' in find_args.keys():
-            self.log.warn('\'limit\' is not permitted in additional args')
+            self.log.warning('\'limit\' is not permitted in additional args')
             find_args.pop('limit')
         if 'cursor' in find_args.keys():
-            self.log.warn('\'cursor\' is not permitted in additional args. Use cursor()/next() instead')
+            self.log.warning('\'cursor\' is not permitted in additional args. Use cursor()/next() instead')
             raise RuntimeError('Use cursor()/next() instead')
         result = None
         if self._cursor:
@@ -254,10 +254,10 @@ class MongoCollection(Generic[T]):
         filter: dict, 
         data: Union[Sequence[T],  T], 
         upsert=False, 
-        array_filters=Optional[List[Dict[str, Any]]], 
+        array_filters: Optional[List[Dict[str, Any]]] = None, 
         bypass_document_validation=False, 
-        collation=Optional[Union[Dict[str, Any], Collation]], 
-        session=Optional[ClientSession]) -> int:
+        collation: Optional[Union[Dict[str, Any], Collation]] = None, 
+        session: Optional[ClientSession] = None) -> int:
         """Update the document(s) in the collection
 
         Args:
