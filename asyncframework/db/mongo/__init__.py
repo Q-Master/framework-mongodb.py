@@ -4,7 +4,7 @@ from .connection import *
 from .collection import *
 from .database import *
 
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 __title__ = 'asyncframework-mongodb'
 __description__ = 'Async framework mongodb addon.'
