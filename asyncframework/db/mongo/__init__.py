@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-from .collection_field import *
 from .connection import *
 from .collection import *
 from .database import *
 
-__version__ = '0.1.7'
+__version__ = '0.2.0'
 
 __title__ = 'asyncframework-mongodb'
 __description__ = 'Async framework mongodb addon.'

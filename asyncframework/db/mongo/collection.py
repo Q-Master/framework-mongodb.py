@@ -1,29 +1,73 @@
 # -*- coding:utf-8 -*-
-from typing import Union, Optional, TypeVar, Generic, List, Tuple, Sequence, Dict, Any
+from typing import Union, Optional, TypeVar, Generic, List, Tuple, Sequence, Dict, Any, Type
 import asyncio
-from pymongo import ReturnDocument, ASCENDING, DESCENDING
-from pymongo.cursor import CursorType
+from pymongo import ReturnDocument, CursorType, IndexModel
 from pymongo.collation import Collation
-from pymongo.client_session import ClientSession
 from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorCursor
+from motor.core import AgnosticClientSession
 from asyncframework.log import get_logger
 from packets import PacketBase
 from packets import TablePacket
-from .collection_field import MongoCollectionField
 
 
-__all__ = ['MongoCollection']
+__all__ = ['MongoCollection', 'MongoCollectionField']
 
 
 T = TypeVar('T', bound=PacketBase)
+
+
+class _MongoCollectionField(Generic[T]):
+    """Class for representing collections in database models
+    """
+    record_type: Type[T]
+    def __init__(self, 
+        record_type: type[T], 
+        name: Optional[str] = None, 
+        indexes: Optional[Sequence[IndexModel]] = None, 
+        default_filter: Optional[Dict[str, Any]] = None, 
+        strict: bool = True, 
+        incremental_ids: bool = False
+    ):
+        """Constructor
+
+        Args:
+            record_type (type[PacketBase]): record class(child of PacketBase)
+            name (Optional[str], optional): database name of collection. If None - same as python name. Defaults to None.
+            indexes (Optional[Sequence[IndexModel]], optional): list of indexes which will be ensured on connection. Defaults to None.
+            default_filter (Optional[Dict[str, Any]], optional): default filter, will be applied for all requests. Defaults to None.
+            strict (bool, optional): strict type checking for deserialization. Defaults to True.
+            incremental_ids (bool, optional): auto increment '_id' field. Defaults to False.
+
+        Raises:
+            TypeError: _description_
+        """
+        assert issubclass(record_type, PacketBase), (record_type, type(record_type))
+        self.indexes: List[IndexModel] = []
+        if indexes:
+            for index in indexes:
+                if not isinstance(index, IndexModel):
+                    raise TypeError(u'Index is not correct %s(%s)' % (index, type(index)))
+                self.indexes.append(index)
+        self.record_type = record_type
+        self.name = name
+        self.default_filter = default_filter or {}
+        self.strict = strict
+        self.incremental_ids = incremental_ids
+
+    def clone(self) -> '_MongoCollectionField':
+        return _MongoCollectionField(self.record_type, self.name, self.indexes, self.default_filter, self.strict, self.incremental_ids)
+
+    def update_name(self, name: str) -> None:
+        if self.name is None:
+            self.name = name
 
 
 class MongoCollection(Generic[T]):
     """MongoDb collection class
     """
     log = get_logger('typed_collection')
-    _collection: AsyncIOMotorCollection
-    _collection_info: MongoCollectionField
+    _collection: Optional[AsyncIOMotorCollection] = None
+    _collection_info: _MongoCollectionField
     _cursor: Optional[AsyncIOMotorCursor] = None
     _projection: List[str]
 
@@ -43,9 +87,10 @@ class MongoCollection(Generic[T]):
         Returns:
             str: the name of collection
         """
-        return self._collection.name
+        assert self._collection_info.name is not None
+        return self._collection_info.name
 
-    def __init__(self, collection: AsyncIOMotorCollection, collection_info: MongoCollectionField) -> None:
+    def __init__(self, collection_info: _MongoCollectionField) -> None:
         """Constructor
 
         Args:
@@ -53,7 +98,6 @@ class MongoCollection(Generic[T]):
             collection_info (CollectionField): the collection higher-level description
         """
         assert issubclass(collection_info.record_type, PacketBase)
-        self._collection = collection
         self._collection_info = collection_info
         self._cursor = None
         self._projection = [] if issubclass(collection_info.record_type, TablePacket) else [field for field in self._collection_info.record_type.__raw_mapping__.keys()]
@@ -61,7 +105,24 @@ class MongoCollection(Generic[T]):
     def __getattr__(self, item):
         return getattr(self._collection, item)
 
-    def cursor(self, filter: dict, tailable: bool = False, await_data: bool = False, **find_args) -> 'MongoCollection[T]':
+
+    def update_name(self, name: str) -> None:
+        self._collection_info.update_name(name)
+
+    def set_collection(self, collection: AsyncIOMotorCollection) -> None:
+        self._collection = collection
+
+    def _check_raise(self):
+        if self._collection is None:
+            raise RuntimeError(f'Collection {self._collection_info.name} is not initialized')
+
+    async def create_indexes(self):
+        self._check_raise()
+        assert self._collection is not None
+        if self._collection_info.indexes:
+            await self._collection.create_indexes(self._collection_info.indexes)
+
+    def cursor(self, filter: Dict[str, Any], tailable: bool = False, await_data: bool = False, **find_args) -> 'MongoCollection[T]':
         """Wrapper over find with cursor.
 
         Args:
@@ -72,6 +133,8 @@ class MongoCollection(Generic[T]):
         Returns:
             Collection[T]: the clone of this collection with cursor set.
         """
+        self._check_raise()
+        assert self._collection is not None
         if 'cursor' in find_args.keys():
             self.log.warning('\'cursor\' is not permitted in additional args')
             find_args.pop('cursor')
@@ -81,13 +144,15 @@ class MongoCollection(Generic[T]):
         if 'cursor' in find_args.keys():
             self.log.warning('\'cursor\' is not permitted in additional args')
             find_args.pop('cursor')
-        cloned: MongoCollection[T] = MongoCollection(self._collection, self._collection_info)
+        cloned: MongoCollection[T] = MongoCollection(self._collection_info)
+        cloned.set_collection(self._collection)
         _filter = dict(self._collection_info.default_filter, **filter)
         if tailable:
             find_args['cursor_type'] = CursorType.TAILABLE
         if tailable and await_data:
             find_args['cursor_type'] = CursorType.TAILABLE_AWAIT
             find_args['await_data'] = True
+        assert cloned._collection is not None
         cloned._cursor = cloned._collection.find(filter=_filter, projection=cloned._projection, **find_args)
         return cloned
 
@@ -120,10 +185,10 @@ class MongoCollection(Generic[T]):
             bool: aliveness of a cursor
         """
         if self._cursor:
-            return self._cursor.alive
+            return self._cursor.alive()
         return False
 
-    async def load(self, filter: dict, **find_args) -> List[T]:
+    async def load(self, filter: Optional[Dict[str, Any]] = None, **find_args) -> List[T]:
         """Load some data from collection
 
         Args:
@@ -135,22 +200,21 @@ class MongoCollection(Generic[T]):
         Returns:
             List[T]: the result of query, mapped to `CollectionField.record_type`
         """
+        self._check_raise()
+        assert self._collection is not None
         if 'fields' in find_args.keys():
             self.log.warning('\'fields\' is not permitted in additional args')
             find_args.pop('fields')
-        if 'filter' in find_args.keys():
-            self.log.warning('\'filter\' is not permitted in additional args')
-            find_args.pop('filter')
         if 'cursor' in find_args.keys():
             self.log.warning('\'cursor\' is not permitted in additional args. Use cursor()/next() instead')
             raise RuntimeError('Use cursor()/next() instead')
-        _filter = dict(self._collection_info.default_filter, **filter)
+        _filter = dict(self._collection_info.default_filter, **filter or {})
         result = []
         async for data in self._collection.find(filter=_filter, projection=self._projection, **find_args):
             result.append(self._collection_info.record_type.load(data, strict=self._collection_info.strict))
         return result
 
-    async def load_one(self, filter: dict, **find_args) -> Optional[T]:
+    async def load_one(self, filter: Dict[str, Any], **find_args) -> Optional[T]:
         """Load one record from collection
 
         Args:
@@ -162,6 +226,8 @@ class MongoCollection(Generic[T]):
         Returns:
             Optional[T]: the result of query, mapped to `CollectionField.record_type`
         """
+        self._check_raise()
+        assert self._collection is not None
         if 'fields' in find_args.keys():
             self.log.warning('\'fields\' is not permitted in additional args')
             find_args.pop('fields')
@@ -192,7 +258,7 @@ class MongoCollection(Generic[T]):
         return None
 
     async def find(self, 
-        filter: Optional[dict] = None, 
+        filter: Optional[Dict[str, Any]] = None, 
         projection: Optional[list] = None, 
         skip: int = 0, 
         limit: int = 0, 
@@ -212,11 +278,13 @@ class MongoCollection(Generic[T]):
         Returns:
             List[dict]: the documents of query
         """
+        self._check_raise()
+        assert self._collection is not None
         _filter = dict(self._collection_info.default_filter, **(filter or {}))
         cursor = self._collection.find(_filter, projection, skip=skip, limit=limit, sort=sort, cursor_type=cursor_type, **find_args)
         return await cursor.to_list(None)
 
-    async def find_one(self, filter: Optional[dict] = None, projection: Optional[list] = None, **kwargs) -> Optional[dict]:
+    async def find_one(self, filter: Optional[Dict[str, Any]] = None, projection: Optional[list] = None, **kwargs) -> Optional[dict]:
         """Query one document from collection.
 
         Args:
@@ -226,12 +294,16 @@ class MongoCollection(Generic[T]):
         Returns:
             Optional[dict]: the found document or None
         """
+        self._check_raise()
+        assert self._collection is not None
         _filter = dict(self._collection_info.default_filter, **(filter or {}))
         return await self._collection.find_one(_filter, projection, **kwargs)
 
-    async def count(self, filter: Optional[dict] = None, projection: Optional[list] = None) -> int:
+    async def count(self, filter: Optional[Dict[str, Any]] = None) -> int:
+        self._check_raise()
+        assert self._collection is not None
         _filter = dict(self._collection_info.default_filter, **(filter or {}))
-        return await self._collection.count_documents(_filter, projection)
+        return await self._collection.count_documents(_filter)
 
     async def save(self, data: Union[Sequence[T], T]):
         """Insert the packet to a collection
@@ -239,9 +311,11 @@ class MongoCollection(Generic[T]):
         Args:
             data (Union[Sequence[T], T]): Sequence of packets or single packet to inser to collection
         """
+        self._check_raise()
+        assert self._collection is not None
         if isinstance(data, Sequence):
             if self._collection_info.incremental_ids:
-                await asyncio.gather((self._next_id(d) for d in data if d['_id'] is None))
+                await asyncio.gather(*[self._next_id(d) for d in data if d['_id'] is None])
             data_to_store = [d.dump() for d in data]
             await self._collection.insert_many(data_to_store, ordered=False)
         else:
@@ -251,13 +325,13 @@ class MongoCollection(Generic[T]):
             await self._collection.insert_one(data_to_store)
 
     async def store(self, 
-        filter: dict, 
+        filter: Dict[str, Any], 
         data: Union[Sequence[T],  T], 
         upsert=False, 
         array_filters: Optional[List[Dict[str, Any]]] = None, 
         bypass_document_validation=False, 
         collation: Optional[Union[Dict[str, Any], Collation]] = None, 
-        session: Optional[ClientSession] = None) -> int:
+        session: Optional[AgnosticClientSession] = None) -> int:
         """Update the document(s) in the collection
 
         Args:
@@ -272,15 +346,25 @@ class MongoCollection(Generic[T]):
         Returns:
             int: amount of documents modified
         """
+        self._check_raise()
+        assert self._collection is not None
         if isinstance(data, Sequence):
             data_to_store = [d.dump() for d in data]
-            result = await self._collection.update_many(filter, {"$set": data_to_store}, upsert=upsert, array_filters=array_filters, bypass_document_validation=bypass_document_validation, collation=collation, session=session)
+            result = await self._collection.update_many(
+                filter, {"$set": data_to_store}, upsert=upsert, 
+                array_filters=array_filters, 
+                bypass_document_validation=bypass_document_validation, 
+                collation=collation, 
+                session=session
+            )
         else:
             data_to_store = data.dump()
             result = await self._collection.update_one(filter, {"$set": data_to_store}, upsert=upsert, array_filters=array_filters, bypass_document_validation=bypass_document_validation, collation=collation, session=session)
         return result.modified_count
 
     async def _next_id(self, d: T):
+        self._check_raise()
+        assert self._collection is not None
         if self._collection_info.incremental_ids:
             res = await self._collection.find_one_and_update(
                 {'_id': self._collection_info.name},
@@ -290,3 +374,16 @@ class MongoCollection(Generic[T]):
             )
             d['_id'] = res['seq']
         raise RuntimeError('CollectionField must be set as incremental_ids=True')
+
+
+def MongoCollectionField(
+        record_type: type[T], 
+        name: Optional[str] = None, 
+        indexes: Optional[Sequence[IndexModel]] = None, 
+        default_filter: Optional[Dict[str, Any]] = None, 
+        strict: bool = True, 
+        incremental_ids: bool = False
+    ) -> MongoCollection[T]:
+    info = _MongoCollectionField(record_type, name, indexes, default_filter, strict, incremental_ids)
+    return MongoCollection[T](info)
+

@@ -11,7 +11,7 @@ __all__ = ['MongoConnection']
 class MongoConnection(Service):
     """MongoDB service
     """
-    __mongo_connection: AsyncIOMotorClient = None
+    __mongo_connection: Optional[AsyncIOMotorClient] = None
     _uri: str
 
     def __init__(self, uri: str):
@@ -54,7 +54,8 @@ class MongoConnection(Service):
         pass
 
     async def __stop__(self):
-        self.__mongo_connection.close()
+        if self.__mongo_connection:
+            self.__mongo_connection.close()
 
     def __getattr__(self, item):
         return getattr(self.__mongo_connection, item)

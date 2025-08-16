@@ -14,5 +14,5 @@ $ pip install git+https://github.com/Q-Master/framework-mongodb.py.git
 
 Usage
 ---
-Mostly usage examples could be seen in tests directory.
+Mostly usage examples could be seen in examples directory.
 The `asyncframework-mongodb` requires `asyncframework`.
