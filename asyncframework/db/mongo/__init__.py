@@ -3,7 +3,7 @@ from .connection import *
 from .collection import *
 from .database import *
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 __title__ = 'asyncframework-mongodb'
 __description__ = 'Async framework mongodb addon.'
@@ -15,4 +15,4 @@ __author__ = 'Vladimir Berezenko'
 __email__ = 'qmaster2000@gmail.com'
 
 __license__ = 'MIT'
-__copyright__ = 'Copyright 2019-2023 Vladimir Berezenko'
+__copyright__ = 'Copyright 2019-2026 Vladimir Berezenko'

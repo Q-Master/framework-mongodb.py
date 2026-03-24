@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-from typing import Union, Optional, TypeVar, Generic, List, Tuple, Sequence, Dict, Any, Type
+from typing import Union, Optional, TypeVar, Generic, List, Tuple, Sequence, Dict, Any, Type, TYPE_CHECKING
 import asyncio
 from pymongo import ReturnDocument, CursorType, IndexModel
 from pymongo.collation import Collation
@@ -8,9 +8,11 @@ from motor.core import AgnosticClientSession
 from asyncframework.log import get_logger
 from packets import PacketBase
 from packets import TablePacket
+if TYPE_CHECKING:
+    from .database import MongoDb
 
 
-__all__ = ['MongoCollection', 'MongoCollectionField']
+__all__ = ['MongoCollection', 'makeCollection']
 
 
 T = TypeVar('T', bound=PacketBase)
@@ -26,7 +28,10 @@ class _MongoCollectionField(Generic[T]):
         indexes: Optional[Sequence[IndexModel]] = None, 
         default_filter: Optional[Dict[str, Any]] = None, 
         strict: bool = True, 
-        incremental_ids: bool = False
+        incremental_ids: bool = False,
+        capped: bool = False,
+        size: Optional[int] = None,
+        maxObjects: Optional[int] = None
     ):
         """Constructor
 
@@ -53,6 +58,9 @@ class _MongoCollectionField(Generic[T]):
         self.default_filter = default_filter or {}
         self.strict = strict
         self.incremental_ids = incremental_ids
+        self.capped = capped
+        self.size = size
+        self.maxObjects = maxObjects
 
     def clone(self) -> '_MongoCollectionField':
         return _MongoCollectionField(self.record_type, self.name, self.indexes, self.default_filter, self.strict, self.incremental_ids)
@@ -105,9 +113,9 @@ class MongoCollection(Generic[T]):
     def __getattr__(self, item):
         return getattr(self._collection, item)
 
-
-    def update_name(self, name: str) -> None:
+    def __set_name__(self, owner: 'MongoDb', name):
         self._collection_info.update_name(name)
+        owner.__collections__[name] = self
 
     def set_collection(self, collection: AsyncIOMotorCollection) -> None:
         self._collection = collection
@@ -315,11 +323,11 @@ class MongoCollection(Generic[T]):
         assert self._collection is not None
         if isinstance(data, Sequence):
             if self._collection_info.incremental_ids:
-                await asyncio.gather(*[self._next_id(d) for d in data if d['_id'] is None])
+                await asyncio.gather(*[self._next_id(d) for d in data if d.get('_id') is None])
             data_to_store = [d.dump() for d in data]
             await self._collection.insert_many(data_to_store, ordered=False)
         else:
-            if self._collection_info.incremental_ids and data['_id'] is None:
+            if self._collection_info.incremental_ids and data.get('_id') is None:
                 await self._next_id(data)
             data_to_store = data.dump()
             await self._collection.insert_one(data_to_store)
@@ -372,18 +380,30 @@ class MongoCollection(Generic[T]):
                 projection={'seq': True, '_id': False},
                 return_document=ReturnDocument.AFTER
             )
-            d['_id'] = res['seq']
+            setattr(d, '_id', res['seq'])
         raise RuntimeError('CollectionField must be set as incremental_ids=True')
 
+    @property
+    def capped(self) -> bool:
+        return self._collection_info.capped
 
-def MongoCollectionField(
+    @property
+    def capped_props(self) -> Tuple[Optional[int], Optional[int]]:
+        return (self.self._collection_info.size, self.self._collection.maxObjects)
+
+
+def makeCollection(
         record_type: type[T], 
         name: Optional[str] = None, 
         indexes: Optional[Sequence[IndexModel]] = None, 
         default_filter: Optional[Dict[str, Any]] = None, 
         strict: bool = True, 
-        incremental_ids: bool = False
+        incremental_ids: bool = False,
+        capped: bool = False,
+        size: Optional[int] = None,
+        maxObjects: Optional[int] = None
     ) -> MongoCollection[T]:
-    info = _MongoCollectionField(record_type, name, indexes, default_filter, strict, incremental_ids)
+    if capped and size is None and maxObjects is None:
+        raise ValueError(f'Capped collections must have either size or maxObjects')
+    info = _MongoCollectionField(record_type, name, indexes, default_filter, strict, incremental_ids, capped, size, maxObjects)
     return MongoCollection[T](info)
-
