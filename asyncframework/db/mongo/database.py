@@ -20,7 +20,18 @@ class ShardObject():
     pass
 
 
-class MongoDb(Service):
+class MongoDbMeta(ABCMeta):
+    def __new__(cls, name, bases, namespace):
+        collections = {}
+        for col_name, value in list(namespace.items()):
+            if isinstance(value, MongoCollection):
+                collections[col_name] = value
+                value.update_name(col_name)
+        namespace['__collections__'] = collections
+        return super().__new__(cls, name, bases, namespace)
+
+
+class MongoDb(Service, metaclass=MongoDbMeta):
     """Mongo database service
     """
     __collections__: Dict[str, MongoCollection] = {}
@@ -62,7 +73,7 @@ class MongoDb(Service):
 
     async def __start__(self, *args, **kwargs):
         await self.__connection.start(self.ioloop)
-        db = self.__connection.get_database()
+        db = self.__connection.get_default_database()
         await asyncio.gather(*[
             self._create_ensure(db, collection) for collection in self.__collections__.values()
         ])
@@ -80,6 +91,6 @@ class MongoDb(Service):
             else:
                 coll = await database.create_collection(collection.collection_name, capped=True, max=collection.capped_props[1], check_exists=True)
         else:
-            coll = database.get_collection(collection.collection_name)
+            coll = database[collection.collection_name]
         collection.set_collection(coll)
         await collection.create_indexes()

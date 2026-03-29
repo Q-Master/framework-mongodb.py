@@ -30,7 +30,7 @@ class Example(Script):
 
     async def __start__(self):
         self.log.info('Starting example DB script')
-        self.example_db = TopDB('mongodb://127.0.0.1/Example')
+        self.example_db = TopDB('mongodb://192.168.10.10/Example')
         await self.example_db.start(self.ioloop)
 
     async def __stop__(self):

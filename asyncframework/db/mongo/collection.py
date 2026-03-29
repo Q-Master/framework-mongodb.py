@@ -74,9 +74,9 @@ class MongoCollection(Generic[T]):
     """MongoDb collection class
     """
     log = get_logger('typed_collection')
-    _collection: Optional[AsyncIOMotorCollection] = None
+    _collection: Optional[AsyncIOMotorCollection]
     _collection_info: _MongoCollectionField
-    _cursor: Optional[AsyncIOMotorCursor] = None
+    _cursor: Optional[AsyncIOMotorCursor]
     _projection: List[str]
 
     @property
@@ -108,14 +108,14 @@ class MongoCollection(Generic[T]):
         assert issubclass(collection_info.record_type, PacketBase)
         self._collection_info = collection_info
         self._cursor = None
+        self._collection = None
         self._projection = [] if issubclass(collection_info.record_type, TablePacket) else [field for field in self._collection_info.record_type.__raw_mapping__.keys()]
 
     def __getattr__(self, item):
         return getattr(self._collection, item)
 
-    def __set_name__(self, owner: 'MongoDb', name):
+    def update_name(self, name):
         self._collection_info.update_name(name)
-        owner.__collections__[name] = self
 
     def set_collection(self, collection: AsyncIOMotorCollection) -> None:
         self._collection = collection

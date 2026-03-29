@@ -3,7 +3,7 @@ from .connection import *
 from .collection import *
 from .database import *
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 __title__ = 'asyncframework-mongodb'
 __description__ = 'Async framework mongodb addon.'
